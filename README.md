@@ -5,9 +5,9 @@
 ## A powerful yt-dlp-style downloader written in Go
 
 [![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat-square&logo=go)](https://golang.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](https://github.com/yourusername/ytdl-go/LICENSE)
-[![Release](https://img.shields.io/github/release/yourusername/ytdl-go.svg?style=flat-square)](https://github.com/yourusername/ytdl-go/releases)
-[![GoDoc](https://img.shields.io/badge/go.dev-reference-007d9c?style=flat-square&logo=go)](https://pkg.go.dev/github.com/yourusername/ytdl-go)
+[![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](https://github.com/lvcoi/ytdl-go/LICENSE)
+[![Release](https://img.shields.io/github/release/lvcoi/ytdl-go.svg?style=flat-square)](https://github.com/lvcoi/ytdl-go/releases)
+[![GoDoc](https://img.shields.io/badge/go.dev-reference-007d9c?style=flat-square&logo=go)](https://pkg.go.dev/github.com/lvcoi/ytdl-go)
 
 ⚡ Blazing fast YouTube downloader with automatic retry, progress tracking, and YouTube Music support ⚡
 
@@ -44,6 +44,7 @@
 - **Flexible output templating** - `-o` supports multiple placeholders:
   - `{title}` - Video title (sanitized)
   - `{artist}` - Video author/artist (sanitized)
+  - `{album}` - Album name from YouTube Music metadata (when available)
   - `{id}` - Video ID
   - `{ext}` - File extension
   - `{quality}` - Quality label or bitrate
@@ -62,13 +63,21 @@
 ### 📋 Prerequisites
 
 - ![Go](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat-square&logo=go) Go 1.23+
-- ![Dependency](https://img.shields.io/badge/Dependency-kkdai%2Fyoutube%2Fv2-blue?style=flat-square) `github.com/kkdai/youtube/v2`
+
+### ⚡ Quick Install (Recommended)
+
+```bash
+# Install directly from GitHub
+go install github.com/lvcoi/ytdl-go/cmd/ytdl-go@latest
+```
+
+This will download, build, and install `ytdl-go` to your `$GOPATH/bin` directory (usually `~/go/bin`). Make sure this directory is in your `PATH`.
 
 ### 🔧 Build from source
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/ytdl-go.git
+git clone https://github.com/lvcoi/ytdl-go.git
 cd ytdl-go
 ```
 
@@ -205,7 +214,7 @@ ytdl-go https://www.youtube.com/watch?v=video1 https://www.youtube.com/watch?v=v
 ## 📊 Command Line Options
 
 | Option | Default | Description |
-|--------|---------|-------------|
+| -------- | --------- | ------------- |
 | `-o` | `{title}.{ext}` | Output path or template with supported placeholders |
 | `-audio` | `false` | Download best available audio-only format |
 | `-info` | `false` | Print video metadata as JSON without downloading |
@@ -215,10 +224,10 @@ ytdl-go https://www.youtube.com/watch?v=video1 https://www.youtube.com/watch?v=v
 ## 🏷️ Output Template Placeholders
 
 | Placeholder | Description | Example |
-|-------------|-------------|---------|
+| ------------- | ------------- | --------- |
 | `{title}` | Video title (sanitized for filesystem) | `My Video Title` |
 | `{artist}` | Video author/artist (sanitized) | `Artist Name` |
-| `{album}` | Album name (playlist title when available) | `Album Name` |
+| `{album}` | Album name from YouTube Music metadata (when available) | `Album Name` |
 | `{id}` | YouTube video ID | `dQw4w9WgXcQ` |
 | `{ext}` | File extension from format | `mp4`, `webm`, `m4a` |
 | `{quality}` | Quality label or bitrate | `1080p`, `128k` |
@@ -321,6 +330,7 @@ The downloader automatically handles most 403 errors by retrying with a differen
 ## ⚡ Performance
 
 The downloader is optimized for:
+
 - Concurrent metadata fetching for playlists
 - Minimal memory usage with streaming downloads
 - Fast resumption on network errors
@@ -353,7 +363,7 @@ Have questions or feedback? Feel free to open an issue on GitHub.
 
 ---
 
-## Made with ❤️ by the ytdl-go team
+## Made with ❤️ by the ytdl-go team (aka ...me)
 
 ---
 
