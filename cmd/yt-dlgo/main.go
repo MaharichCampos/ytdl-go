@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"yt-dlgo/internal/downloader"
+	"ytdl-go/internal/downloader"
 )
 
 func main() {
