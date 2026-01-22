@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"strings"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"golang.org/x/term"
@@ -171,9 +169,10 @@ func (m *progressManager) sendEvent(event progressEvent) {
 }
 
 func (m *progressManager) loop(ctx context.Context) {
-	sigch := make(chan os.Signal, 1)
-	signal.Notify(sigch, syscall.SIGWINCH)
-	defer signal.Stop(sigch)
+	sigch, stopSignals := resizeSignalChannel()
+	if stopSignals != nil {
+		defer stopSignals()
+	}
 	defer close(m.done)
 
 	for {
@@ -186,10 +185,8 @@ func (m *progressManager) loop(ctx context.Context) {
 			return
 		case <-m.ticker.C:
 			m.render()
-		case sig := <-sigch:
-			if sig == syscall.SIGWINCH {
-				m.sendEvent(progressEvent{kind: eventResize, width: m.widthFunc()})
-			}
+		case <-sigch:
+			m.sendEvent(progressEvent{kind: eventResize, width: m.widthFunc()})
 		case event := <-m.events:
 			switch event.kind {
 			case eventAddTask:
