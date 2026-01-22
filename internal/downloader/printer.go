@@ -9,13 +9,16 @@ import (
 )
 
 type Printer struct {
-	quiet      bool
-	color      bool
-	columns    int
-	titleWidth int
+	quiet           bool
+	color           bool
+	columns         int
+	titleWidth      int
+	manager         *progressManager
+	logLevel        LogLevel
+	progressEnabled bool
 }
 
-func newPrinter(opts Options) *Printer {
+func newPrinter(opts Options, manager *progressManager) *Printer {
 	columns := terminalColumns()
 	if columns <= 0 {
 		columns = 100
@@ -30,10 +33,13 @@ func newPrinter(opts Options) *Printer {
 	}
 
 	return &Printer{
-		quiet:      opts.Quiet,
-		color:      supportsColor(),
-		columns:    columns,
-		titleWidth: titleWidth,
+		quiet:           opts.Quiet,
+		color:           supportsColor(),
+		columns:         columns,
+		titleWidth:      titleWidth,
+		manager:         manager,
+		logLevel:        parseLogLevel(opts.LogLevel),
+		progressEnabled: isTerminal(os.Stderr) && supportsANSI(),
 	}
 }
 
@@ -76,7 +82,9 @@ func (p *Printer) ItemResult(prefix string, result downloadResult, err error) {
 	}
 
 	if result.hadProgress {
-		p.clearLine()
+		if p.manager == nil {
+			p.clearLine()
+		}
 	}
 
 	statusText := "OK"
@@ -131,6 +139,22 @@ func (p *Printer) Summary(total, ok, failed, skipped int, bytes int64) {
 		okLabel, ok, failLabel, failed, skipLabel, skipped, total, humanBytes(bytes))
 }
 
+func (p *Printer) Log(level LogLevel, message string) {
+	if p.quiet {
+		return
+	}
+	if level < p.logLevel {
+		return
+	}
+	if p.manager != nil {
+		p.manager.Log(level, message)
+		return
+	}
+
+	label := levelLabel(level)
+	fmt.Fprintf(os.Stderr, "%s %s\n", label, message)
+}
+
 func (p *Printer) colorize(text, color string) string {
 	if !p.color || color == "" {
 		return text
@@ -144,6 +168,14 @@ func (p *Printer) clearLine() {
 		width = 100
 	}
 	fmt.Fprintf(os.Stderr, "\r%s\r", strings.Repeat(" ", width))
+}
+
+func (p *Printer) writeProgressLine(line string) {
+	if line == "\n" {
+		fmt.Fprint(os.Stderr, "\n")
+		return
+	}
+	fmt.Fprintf(os.Stderr, "\r%s", line)
 }
 
 func padLeft(value string, width int) string {
