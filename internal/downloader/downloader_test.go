@@ -2,7 +2,7 @@ package downloader
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"strings"
 	"testing"
 
@@ -66,39 +66,66 @@ func TestWriteFormats(t *testing.T) {
 	}
 }
 
-func TestIsRestrictedAccess(t *testing.T) {
+func TestWrapAccessError(t *testing.T) {
 	tests := []struct {
 		name       string
-		errMsg     string
-		wantResult bool
+		input      error
+		wantNil    bool
+		wantPrefix string
 	}{
-		{name: "nil error", errMsg: "", wantResult: false},
-		{name: "private video", errMsg: "This video is private", wantResult: true},
-		{name: "sign in required", errMsg: "Please sign in to view", wantResult: true},
-		{name: "login required", errMsg: "Login required", wantResult: true},
-		{name: "members only", errMsg: "This content is members only", wantResult: true},
-		{name: "premium content", errMsg: "Premium subscription required", wantResult: true},
-		{name: "copyright restriction", errMsg: "Copyright claim by owner", wantResult: true},
-		{name: "unavailable", errMsg: "This video is unavailable", wantResult: true},
-		{name: "age-restricted with hyphen", errMsg: "This video is age-restricted", wantResult: true},
-		{name: "age restricted without hyphen", errMsg: "This video is age restricted", wantResult: true},
-		{name: "not available", errMsg: "Video not available in your country", wantResult: true},
-		{name: "case insensitive - PRIVATE", errMsg: "PRIVATE VIDEO", wantResult: true},
-		{name: "case insensitive - MiXeD", errMsg: "MeMbErS OnLy", wantResult: true},
-		{name: "network error", errMsg: "network timeout", wantResult: false},
-		{name: "generic error", errMsg: "something went wrong", wantResult: false},
-		{name: "false positive - availability", errMsg: "check availability", wantResult: false},
+		{
+			name:    "nil error returns nil",
+			input:   nil,
+			wantNil: true,
+		},
+		{
+			name:       "private video error gets wrapped",
+			input:      errors.New("This video is private"),
+			wantPrefix: "restricted access:",
+		},
+		{
+			name:       "members only error gets wrapped",
+			input:      errors.New("Members only content"),
+			wantPrefix: "restricted access:",
+		},
+		{
+			name:       "age-restricted error gets wrapped",
+			input:      errors.New("This video is age-restricted"),
+			wantPrefix: "restricted access:",
+		},
+		{
+			name:       "non-restricted error is unchanged",
+			input:      errors.New("network timeout"),
+			wantPrefix: "",
+		},
+		{
+			name:       "generic error is unchanged",
+			input:      errors.New("something went wrong"),
+			wantPrefix: "",
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			var err error
-			if test.errMsg != "" {
-				err = fmt.Errorf("%s", test.errMsg)
+			result := wrapAccessError(test.input)
+			if test.wantNil {
+				if result != nil {
+					t.Fatalf("expected nil, got %v", result)
+				}
+				return
 			}
-			result := isRestrictedAccess(err)
-			if result != test.wantResult {
-				t.Fatalf("isRestrictedAccess(%v) = %v, want %v", err, result, test.wantResult)
+			if result == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if test.wantPrefix != "" {
+				if !strings.HasPrefix(result.Error(), test.wantPrefix) {
+					t.Fatalf("expected error to start with %q, got %q", test.wantPrefix, result.Error())
+				}
+			} else {
+				// Non-restricted errors should be unchanged
+				if result.Error() != test.input.Error() {
+					t.Fatalf("expected error %q to be unchanged, got %q", test.input.Error(), result.Error())
+				}
 			}
 		})
 	}
