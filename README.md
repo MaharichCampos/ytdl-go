@@ -139,6 +139,11 @@ ytdl-go --info https://www.youtube.com/watch?v=BaW_jenozKc
 
 ![Metadata output example](screenshots/07-metadata-info.svg)
 
+```bash
+# List available formats without downloading
+ytdl-go --list-formats https://www.youtube.com/watch?v=BaW_jenozKc
+```
+
 ### 🎨 Output customization
 
 ```bash
@@ -395,6 +400,15 @@ done
 
 ## 📝 Notes / Limitations
 
+### Supported Formats
+
+- **YouTube-only**: This tool is specifically designed for YouTube and YouTube Music
+- **Progressive formats**: Only downloads videos with audio+video combined (no DASH muxing)
+- **Audio formats**: Supports best available audio-only formats via `--audio` flag
+- **No HLS/DASH parsing**: Relies on YouTube's progressive stream availability
+
+### Technical Limitations
+
 - Only progressive formats are pulled for video; DASH-only video+audio muxing is not implemented
 - Only public, non-DRM content is supported; login-required/paywalled/DRM manifests are rejected
 - Adaptive HLS/DASH downloads concatenate segments; if a manifest uses unsupported segment templates the download will fail fast
@@ -404,6 +418,42 @@ done
 - No credential storage or cookie jars are used; no browser automation is performed
 - Output directories are created as needed; trailing slash on `-o` forces treating it as a directory
 - Maximum 9999 automatic renames when using the rename option to prevent infinite loops
+- No resume support for interrupted downloads
+
+### Non-Goals / Explicitly Not Supported
+
+This tool is designed exclusively for **publicly accessible YouTube content**. The following are explicitly **not supported** and will not be added:
+
+❌ **DRM/Encrypted Content**
+- Widevine, PlayReady, or other DRM-protected streams
+- AES-128 encrypted HLS streams
+- DASH manifests with CENC encryption
+
+❌ **Access Control Bypass**
+- Login-required or members-only videos
+- Paywall-protected content
+- Age-restricted content requiring sign-in
+- Private or unlisted videos requiring authentication
+
+❌ **Platform Limitations**
+- Non-YouTube platforms
+- Browser automation or cookie extraction
+- Credential harvesting or token spoofing
+
+### ⚖️ Legal Notice
+
+**Important**: Users are solely responsible for ensuring their use of this tool complies with:
+- YouTube's Terms of Service
+- Applicable copyright laws in their jurisdiction
+- Content creator rights and licenses
+
+This tool:
+- ✅ Only accesses publicly available content through standard APIs
+- ✅ Does not circumvent any technical protection measures or DRM
+- ✅ Does not bypass authentication or access controls
+- ❌ Should not be used to download copyrighted content without permission
+
+**When restricted content is detected** (private videos, login-required, etc.), the tool will refuse to proceed and exit with a clear error message.
 
 ## 🚫 Non-goals
 

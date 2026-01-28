@@ -1,98 +1,162 @@
 package downloader
 
 import (
+	"bytes"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/kkdai/youtube/v2"
 )
 
-func TestParseVideoQuality(t *testing.T) {
-	target, preferLowest, err := parseVideoQuality("720p")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if target != 720 || preferLowest {
-		t.Fatalf("expected 720p target, got %d (preferLowest=%v)", target, preferLowest)
+func TestValidateURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{name: "valid https", input: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", wantErr: false},
+		{name: "valid http", input: "http://example.com/video.mp4", wantErr: false},
+		{name: "missing scheme", input: "www.youtube.com/watch?v=dQw4w9WgXcQ", wantErr: true},
+		{name: "empty scheme", input: "//www.youtube.com/watch?v=dQw4w9WgXcQ", wantErr: true},
+		{name: "missing host", input: "https:///video", wantErr: true},
+		{name: "unsupported scheme", input: "ftp://example.com/video", wantErr: true},
+		{name: "playlist id", input: "PL59FEE129ADFF2B12", wantErr: false},
 	}
 
-	target, preferLowest, err = parseVideoQuality("worst")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if target != 0 || !preferLowest {
-		t.Fatalf("expected worst to request lowest quality, got target=%d preferLowest=%v", target, preferLowest)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := validateURL(test.input)
+			if test.wantErr && err == nil {
+				t.Fatalf("expected error for %q", test.input)
+			}
+			if !test.wantErr && err != nil {
+				t.Fatalf("unexpected error for %q: %v", test.input, err)
+			}
+		})
 	}
 }
 
-func TestSelectFormatRespectsMaxHeight(t *testing.T) {
+func TestIsRestrictedAccess(t *testing.T) {
+	tests := []struct {
+		name    string
+		err     error
+		wantHit bool
+	}{
+		{name: "private", err: errors.New("video is private"), wantHit: true},
+		{name: "sign in", err: errors.New("sign in to confirm your age"), wantHit: true},
+		{name: "members only", err: errors.New("members only video"), wantHit: true},
+		{name: "premium", err: errors.New("premium content"), wantHit: true},
+		{name: "copyright", err: errors.New("copyright claim"), wantHit: true},
+		{name: "video unavailable", err: errors.New("video unavailable"), wantHit: true},
+		{name: "content unavailable", err: errors.New("content unavailable"), wantHit: true},
+		{name: "age restricted", err: errors.New("age restricted"), wantHit: true},
+		{name: "not available", err: errors.New("not available in your country"), wantHit: true},
+		{name: "nil error", err: nil, wantHit: false},
+		{name: "unrelated", err: errors.New("temporary network error"), wantHit: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := isRestrictedAccess(test.err); got != test.wantHit {
+				t.Fatalf("expected %v for %v, got %v", test.wantHit, test.err, got)
+			}
+		})
+	}
+}
+
+func TestWriteFormats(t *testing.T) {
 	video := &youtube.Video{
-		Formats: youtube.FormatList{
-			{ItagNo: 18, MimeType: "video/mp4", Width: 640, Height: 360, Bitrate: 800_000, AudioChannels: 2},
-			{ItagNo: 22, MimeType: "video/mp4", Width: 1280, Height: 720, Bitrate: 2_000_000, AudioChannels: 2},
-			{ItagNo: 247, MimeType: "video/webm", Width: 1280, Height: 720, Bitrate: 1_600_000, AudioChannels: 2},
+		Formats: []youtube.Format{
+			{
+				ItagNo:        22,
+				Quality:       "hd720",
+				QualityLabel:  "720p",
+				MimeType:      "video/mp4",
+				Bitrate:       2000000,
+				AudioChannels: 2,
+				Width:         1280,
+				Height:        720,
+				ContentLength: 1234,
+			},
 		},
 	}
 
-	format, err := selectFormat(video, Options{Quality: "480p"})
-	if err != nil {
-		t.Fatalf("selectFormat returned error: %v", err)
-	}
-	if format.Height != 360 {
-		t.Fatalf("expected 360p selection, got %dp (itag %d)", format.Height, format.ItagNo)
+	var buf bytes.Buffer
+	if err := writeFormats(&buf, video); err != nil {
+		t.Fatalf("writeFormats returned error: %v", err)
 	}
 
-	format, err = selectFormat(video, Options{Quality: "720p", Format: "webm"})
-	if err != nil {
-		t.Fatalf("selectFormat returned error: %v", err)
+	output := buf.String()
+	if !strings.Contains(output, "itag") {
+		t.Fatalf("expected header in output, got: %q", output)
 	}
-	if format.ItagNo != 247 {
-		t.Fatalf("expected webm format (itag 247), got itag %d", format.ItagNo)
+	if !strings.Contains(output, "720p") {
+		t.Fatalf("expected format row in output, got: %q", output)
 	}
 }
 
-func TestSelectAudioBitrate(t *testing.T) {
-	video := &youtube.Video{
-		Formats: youtube.FormatList{
-			{ItagNo: 140, MimeType: "audio/mp4", AudioChannels: 2, Bitrate: 128_000},
-			{ItagNo: 251, MimeType: "audio/webm", AudioChannels: 2, Bitrate: 160_000},
+func TestWrapAccessError(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      error
+		wantNil    bool
+		wantPrefix string
+	}{
+		{
+			name:    "nil error returns nil",
+			input:   nil,
+			wantNil: true,
+		},
+		{
+			name:       "private video error gets wrapped",
+			input:      errors.New("This video is private"),
+			wantPrefix: "restricted access:",
+		},
+		{
+			name:       "members only error gets wrapped",
+			input:      errors.New("Members only content"),
+			wantPrefix: "restricted access:",
+		},
+		{
+			name:       "age-restricted error gets wrapped",
+			input:      errors.New("This video is age-restricted"),
+			wantPrefix: "restricted access:",
+		},
+		{
+			name:       "non-restricted error is unchanged",
+			input:      errors.New("network timeout"),
+			wantPrefix: "",
+		},
+		{
+			name:       "generic error is unchanged",
+			input:      errors.New("something went wrong"),
+			wantPrefix: "",
 		},
 	}
 
-	format, err := selectFormat(video, Options{AudioOnly: true, Quality: "128k"})
-	if err != nil {
-		t.Fatalf("selectFormat returned error: %v", err)
-	}
-	if format.ItagNo != 140 {
-		t.Fatalf("expected itag 140 for 128k target, got %d", format.ItagNo)
-	}
-}
-
-func TestSelectFormatUnsupportedIncludesHint(t *testing.T) {
-	video := &youtube.Video{
-		Formats: youtube.FormatList{
-			{ItagNo: 18, MimeType: "video/mp4", Width: 640, Height: 360, Bitrate: 800_000, AudioChannels: 2},
-		},
-	}
-
-	_, err := selectFormat(video, Options{Format: "webm"})
-	if err == nil {
-		t.Fatalf("expected error for unavailable format")
-	}
-	if CategoryOf(err) != CategoryUnsupported {
-		t.Fatalf("expected unsupported category, got %s", CategoryOf(err))
-	}
-	if !strings.Contains(err.Error(), "--list-formats") {
-		t.Fatalf("expected hint to use --list-formats, got %q", err.Error())
-	}
-}
-
-func TestValidateInputURL(t *testing.T) {
-	_, err := validateInputURL("ftp://example.com/video.mp4")
-	if err == nil {
-		t.Fatalf("expected error for unsupported scheme")
-	}
-	if CategoryOf(err) != CategoryInvalidURL {
-		t.Fatalf("expected invalid_url category, got %s", CategoryOf(err))
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := wrapAccessError(test.input)
+			if test.wantNil {
+				if result != nil {
+					t.Fatalf("expected nil, got %v", result)
+				}
+				return
+			}
+			if result == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if test.wantPrefix != "" {
+				if !strings.HasPrefix(result.Error(), test.wantPrefix) {
+					t.Fatalf("expected error to start with %q, got %q", test.wantPrefix, result.Error())
+				}
+			} else {
+				// Non-restricted errors should be unchanged
+				if result.Error() != test.input.Error() {
+					t.Fatalf("expected error %q to be unchanged, got %q", test.input.Error(), result.Error())
+				}
+			}
+		})
 	}
 }

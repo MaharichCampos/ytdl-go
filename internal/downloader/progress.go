@@ -5,38 +5,30 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 )
 
 type progressWriter struct {
-	size      int64
-	total     int64
-	start     time.Time
-	lastPrint time.Time
-	finished  bool
-	lastLen   int
-	prefix    string
-	printer   *Printer
-	barID     string
+	size     int64
+	total    int64
+	start    time.Time
+	finished bool
+	prefix   string
+	printer  *Printer
+	taskID   string
 }
 
 func newProgressWriter(size int64, printer *Printer, prefix string) *progressWriter {
-	if printer != nil && printer.renderer != nil {
-		barID := printer.renderer.Register(prefix, size)
-		return &progressWriter{
-			size:    size,
-			start:   time.Now(),
-			prefix:  prefix,
-			printer: printer,
-			barID:   barID,
-		}
+	taskID := ""
+	if printer.manager != nil {
+		taskID = printer.manager.AddTask(prefix, size)
 	}
 	return &progressWriter{
 		size:    size,
 		start:   time.Now(),
 		prefix:  prefix,
 		printer: printer,
+		taskID:  taskID,
 	}
 }
 
@@ -44,21 +36,7 @@ func (p *progressWriter) Write(b []byte) (int, error) {
 	n := len(b)
 	p.total += int64(n)
 
-	if p.printer != nil && p.printer.renderer != nil {
-		p.printer.renderer.Update(p.barID, int64(n), p.total, p.size)
-		return n, nil
-	}
-
-	now := time.Now()
-	shouldPrint := p.total == p.size
-	if now.Sub(p.lastPrint) > 200*time.Millisecond {
-		shouldPrint = true
-	}
-
-	if shouldPrint {
-		p.print()
-		p.lastPrint = now
-	}
+	p.print()
 	return n, nil
 }
 
@@ -66,18 +44,15 @@ func (p *progressWriter) print() {
 	if p.finished {
 		return
 	}
-
-	line := p.printer.progressLine(p.prefix, p.total, p.size, time.Since(p.start))
-	if p.printer.interactive {
-		if p.lastLen > len(line) {
-			line += strings.Repeat(" ", p.lastLen-len(line))
-		}
-		p.lastLen = len(line)
-		fmt.Fprintf(os.Stderr, "\r%s", line)
+	if !p.printer.progressEnabled {
 		return
 	}
-
-	fmt.Fprintln(os.Stderr, line)
+	if p.printer.manager != nil && p.taskID != "" {
+		p.printer.manager.UpdateTask(p.taskID, p.total, p.size, time.Since(p.start))
+		return
+	}
+	line := p.printer.progressLine(p.prefix, p.total, p.size, time.Since(p.start))
+	p.printer.writeProgressLine(line)
 }
 
 func (p *progressWriter) Finish() {
@@ -85,25 +60,27 @@ func (p *progressWriter) Finish() {
 		return
 	}
 	p.finished = true
-	if p.printer != nil && p.printer.renderer != nil {
-		p.printer.renderer.Finish(p.barID)
-		p.printer.renderer.Flush()
+	if !p.printer.progressEnabled {
+		line := p.printer.progressLine(p.prefix, p.total, p.size, time.Since(p.start))
+		fmt.Fprintf(os.Stderr, "%s\n", line)
 		return
 	}
 	p.print()
-	// Move to next line after finishing
-	fmt.Fprint(os.Stderr, "\n")
+	if p.printer.manager != nil && p.taskID != "" {
+		p.printer.manager.FinishTask(p.taskID)
+		return
+	}
+	p.printer.writeProgressLine("\n")
 }
 
 func (p *progressWriter) NewLine() {
 	if p.finished {
 		return
 	}
-	if p.printer != nil && p.printer.renderer != nil {
+	if p.printer.manager != nil || !p.printer.progressEnabled {
 		return
 	}
-	p.lastLen = 0
-	fmt.Fprint(os.Stderr, "\n")
+	p.printer.writeProgressLine("\n")
 }
 
 type contextReader struct {

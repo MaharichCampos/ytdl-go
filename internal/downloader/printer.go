@@ -10,17 +10,16 @@ import (
 )
 
 type Printer struct {
-	quiet       bool
-	color       bool
-	columns     int
-	titleWidth  int
-	interactive bool
-	renderer    *ProgressRenderer
-	layout      string
-	mu          sync.RWMutex
+	quiet           bool
+	color           bool
+	columns         int
+	titleWidth      int
+	manager         *progressManager
+	logLevel        LogLevel
+	progressEnabled bool
 }
 
-func newPrinter(opts Options) *Printer {
+func newPrinter(opts Options, manager *progressManager) *Printer {
 	columns := terminalColumns()
 	if columns <= 0 {
 		columns = 100
@@ -34,13 +33,14 @@ func newPrinter(opts Options) *Printer {
 		titleWidth = 60
 	}
 
-	printer := &Printer{
-		quiet:       opts.Quiet,
-		color:       supportsColor(),
-		columns:     columns,
-		titleWidth:  titleWidth,
-		interactive: isTerminal(os.Stderr),
-		layout:      strings.TrimSpace(opts.ProgressLayout),
+	return &Printer{
+		quiet:           opts.Quiet,
+		color:           supportsColor(),
+		columns:         columns,
+		titleWidth:      titleWidth,
+		manager:         manager,
+		logLevel:        parseLogLevel(opts.LogLevel),
+		progressEnabled: isTerminal(os.Stderr) && supportsANSI(),
 	}
 	if !opts.Quiet && printer.interactive {
 		printer.renderer = newProgressRenderer(os.Stderr, printer)
@@ -125,15 +125,15 @@ func (p *Printer) ItemResult(prefix string, result downloadResult, err error) {
 	}
 	detail = truncateText(detail, maxDetail)
 
-	line := fmt.Sprintf("%s %s %s", prefix, status, detail)
-	if p.renderer != nil {
-		p.renderer.Log(line)
-		return
+	message := fmt.Sprintf("%s %s %s", prefix, status, detail)
+	if p.manager != nil {
+		p.manager.Log(LogInfo, message)
+	} else {
+		if result.hadProgress {
+			p.clearLine()
+		}
+		fmt.Fprintln(os.Stderr, message)
 	}
-	if result.hadProgress {
-		p.clearLine()
-	}
-	fmt.Fprintln(os.Stderr, line)
 }
 
 func (p *Printer) ItemSkipped(prefix, reason string) {
@@ -148,12 +148,12 @@ func (p *Printer) ItemSkipped(prefix, reason string) {
 	if maxDetail < 0 {
 		maxDetail = 0
 	}
-	line := fmt.Sprintf("%s %s %s", prefix, status, truncateText(reason, maxDetail))
-	if p.renderer != nil {
-		p.renderer.Log(line)
-		return
+	message := fmt.Sprintf("%s %s %s", prefix, status, truncateText(reason, maxDetail))
+	if p.manager != nil {
+		p.manager.Log(LogInfo, message)
+	} else {
+		fmt.Fprintln(os.Stderr, message)
 	}
-	fmt.Fprintln(os.Stderr, line)
 }
 
 func (p *Printer) Summary(total, ok, failed, skipped int, bytes int64) {
@@ -170,6 +170,22 @@ func (p *Printer) Summary(total, ok, failed, skipped int, bytes int64) {
 		return
 	}
 	fmt.Fprintln(os.Stderr, line)
+}
+
+func (p *Printer) Log(level LogLevel, message string) {
+	if p.quiet {
+		return
+	}
+	if level < p.logLevel {
+		return
+	}
+	if p.manager != nil {
+		p.manager.Log(level, message)
+		return
+	}
+
+	label := levelLabel(level)
+	fmt.Fprintf(os.Stderr, "%s %s\n", label, message)
 }
 
 func (p *Printer) colorize(text, color string) string {
@@ -190,33 +206,12 @@ func (p *Printer) clearLine() {
 	fmt.Fprintf(os.Stderr, "\r%s\r", strings.Repeat(" ", width))
 }
 
-func (p *Printer) refreshLayout() {
-	columns := terminalColumns()
-	if columns <= 0 {
-		columns = 100
-	}
-	p.mu.Lock()
-	p.columns = columns
-	titleWidth := columns - 44
-	if titleWidth < 20 {
-		titleWidth = 20
-	}
-	if titleWidth > 60 {
-		titleWidth = 60
-	}
-	p.titleWidth = titleWidth
-	p.mu.Unlock()
-}
-
-func (p *Printer) Log(line string) {
-	if p.quiet {
+func (p *Printer) writeProgressLine(line string) {
+	if line == "\n" {
+		fmt.Fprint(os.Stderr, "\n")
 		return
 	}
-	if p.renderer != nil {
-		p.renderer.Log(line)
-		return
-	}
-	fmt.Fprintln(os.Stderr, line)
+	fmt.Fprintf(os.Stderr, "\r%s", line)
 }
 
 func padLeft(value string, width int) string {
