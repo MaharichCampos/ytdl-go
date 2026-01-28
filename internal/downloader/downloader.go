@@ -189,12 +189,7 @@ func wrapFetchError(err error, context string) error {
 
 // Process fetches metadata, selects the best matching format, and downloads it.
 func Process(ctx context.Context, url string, opts Options) error {
-	progressManager := newProgressManager(opts)
-	if progressManager != nil {
-		progressManager.Start(ctx)
-		defer progressManager.Stop()
-	}
-	printer := newPrinter(opts, progressManager)
+	printer := newPrinter(opts)
 
 	normalizedURL, err := validateInputURL(url)
 	if err != nil {
@@ -224,14 +219,15 @@ func Process(ctx context.Context, url string, opts Options) error {
 	if err != nil {
 		return markReported(err)
 	}
-	okCount := 1
-	skipped := 0
-	if result.skipped {
-		okCount = 0
-		skipped = 1
+	return extractor.Process(ctx, normalizedURL, opts, printer)
+}
+
+// selectExtractor returns the appropriate extractor for the given URL
+func selectExtractor(url string) (Extractor, error) {
+	if isYouTubeURL(url) {
+		return YouTubeExtractor{}, nil
 	}
-	printer.Summary(1, okCount, 0, skipped, result.bytes)
-	return nil
+	return DirectExtractor{}, nil
 }
 
 func renderFormats(video *youtube.Video, header string, opts Options, playlistID, playlistTitle string, index, total int) error {

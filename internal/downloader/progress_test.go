@@ -31,7 +31,7 @@ func captureStderr(t *testing.T, fn func()) string {
 
 func TestProgressNonTTYUsesNewlines(t *testing.T) {
 	output := captureStderr(t, func() {
-		printer := newPrinter(Options{}, nil)
+		printer := newPrinter(Options{})
 		progress := newProgressWriter(10, printer, "[1/1] demo")
 		_, _ = progress.Write([]byte("12345"))
 		progress.Finish()
@@ -47,7 +47,7 @@ func TestProgressNonTTYUsesNewlines(t *testing.T) {
 
 func TestProgressInterleavesLogsNonTTY(t *testing.T) {
 	output := captureStderr(t, func() {
-		printer := newPrinter(Options{}, nil)
+		printer := newPrinter(Options{})
 		progress := newProgressWriter(10, printer, "[1/1] demo")
 		_, _ = progress.Write([]byte("12345"))
 		printer.Log(LogInfo, "log message")
