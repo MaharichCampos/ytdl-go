@@ -54,19 +54,19 @@ type progressTask struct {
 }
 
 type progressManager struct {
-	writer   io.Writer
-	layout   string
-	logLevel LogLevel
-	width    int
+	writer    io.Writer
+	layout    string
+	logLevel  LogLevel
+	width     int
 	widthFunc func() int
-	events   chan progressEvent
-	stop     chan struct{}
-	done     chan struct{}
-	tasks    map[string]*progressTask
-	trackers map[string]*progress.Tracker
-	order    []string
-	counter  uint64
-	pw       progress.Writer
+	events    chan progressEvent
+	stop      chan struct{}
+	done      chan struct{}
+	tasks     map[string]*progressTask
+	trackers  map[string]*progress.Tracker
+	order     []string
+	counter   uint64
+	pw        progress.Writer
 }
 
 func newProgressManager(opts Options) *progressManager {
@@ -80,7 +80,7 @@ func newProgressManager(opts Options) *progressManager {
 	if strings.TrimSpace(layout) == "" {
 		layout = "{label} {percent} {bar} {bytes} {rate} {eta}"
 	}
-	
+
 	// Create go-pretty progress writer
 	pw := progress.NewWriter()
 	pw.SetAutoStop(false)
@@ -93,7 +93,7 @@ func newProgressManager(opts Options) *progressManager {
 	pw.Style().Options.SpeedOverallFormatter = progress.FormatBytes
 	pw.Style().Colors = progress.StyleColorsExample
 	pw.SetStyle(progress.StyleBlocks)
-	
+
 	manager := &progressManager{
 		writer:    os.Stderr,
 		layout:    layout,
@@ -113,7 +113,7 @@ func newProgressManagerForTest(writer io.Writer, widthFunc func() int, layout st
 	if strings.TrimSpace(layout) == "" {
 		layout = "{label} {percent} {bar} {bytes} {rate} {eta}"
 	}
-	
+
 	// Create go-pretty progress writer for test
 	pw := progress.NewWriter()
 	pw.SetAutoStop(false)
@@ -124,7 +124,7 @@ func newProgressManagerForTest(writer io.Writer, widthFunc func() int, layout st
 	pw.Style().Visibility.Value = true
 	pw.Style().Visibility.Percentage = true
 	pw.SetStyle(progress.StyleBlocks)
-	
+
 	return &progressManager{
 		writer:    writer,
 		layout:    layout,
@@ -147,10 +147,10 @@ func (m *progressManager) Start(ctx context.Context) {
 	if m.width <= 0 {
 		m.width = 100
 	}
-	
+
 	// Start go-pretty progress writer rendering
 	go m.pw.Render()
-	
+
 	go m.loop(ctx)
 }
 
@@ -160,7 +160,7 @@ func (m *progressManager) Stop() {
 	}
 	close(m.stop)
 	<-m.done
-	
+
 	// Stop the progress writer (it will render one final time)
 	m.pw.Stop()
 }
@@ -230,7 +230,7 @@ func (m *progressManager) loop(ctx context.Context) {
 					Units:   progress.UnitsBytes,
 				}
 				m.pw.AppendTracker(tracker)
-				
+
 				m.tasks[event.taskID] = &progressTask{
 					id:    event.taskID,
 					label: event.label,
@@ -279,10 +279,6 @@ func (m *progressManager) logLine(level LogLevel, message string) {
 	} else {
 		m.pw.Log("%s %s", label, message)
 	}
-}
-
-func visibleLength(text string) int {
-	return len(text)
 }
 
 func parseLogLevel(value string) LogLevel {

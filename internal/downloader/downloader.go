@@ -203,7 +203,7 @@ func Process(ctx context.Context, url string, opts Options) error {
 
 	// Check if it's a music URL before converting
 	isMusicURL := strings.Contains(url, "music.youtube.com")
-	
+
 	// Convert YouTube Music URLs to regular YouTube URLs
 	normalizedURL = ConvertMusicURL(normalizedURL)
 
@@ -1166,10 +1166,6 @@ func printInfo(video *youtube.Video) error {
 	enc.SetIndent("", "  ")
 	enc.SetEscapeHTML(false)
 	return enc.Encode(payload)
-}
-
-func printFormats(video *youtube.Video) error {
-	return writeFormats(os.Stdout, video)
 }
 
 func writeFormats(output io.Writer, video *youtube.Video) error {
