@@ -18,9 +18,20 @@ type progressWriter struct {
 	lastLen   int
 	prefix    string
 	printer   *Printer
+	barID     string
 }
 
 func newProgressWriter(size int64, printer *Printer, prefix string) *progressWriter {
+	if printer != nil && printer.renderer != nil {
+		barID := printer.renderer.Register(prefix, size)
+		return &progressWriter{
+			size:    size,
+			start:   time.Now(),
+			prefix:  prefix,
+			printer: printer,
+			barID:   barID,
+		}
+	}
 	return &progressWriter{
 		size:    size,
 		start:   time.Now(),
@@ -32,6 +43,11 @@ func newProgressWriter(size int64, printer *Printer, prefix string) *progressWri
 func (p *progressWriter) Write(b []byte) (int, error) {
 	n := len(b)
 	p.total += int64(n)
+
+	if p.printer != nil && p.printer.renderer != nil {
+		p.printer.renderer.Update(p.barID, int64(n), p.total, p.size)
+		return n, nil
+	}
 
 	now := time.Now()
 	shouldPrint := p.total == p.size
@@ -52,11 +68,16 @@ func (p *progressWriter) print() {
 	}
 
 	line := p.printer.progressLine(p.prefix, p.total, p.size, time.Since(p.start))
-	if p.lastLen > len(line) {
-		line += strings.Repeat(" ", p.lastLen-len(line))
+	if p.printer.interactive {
+		if p.lastLen > len(line) {
+			line += strings.Repeat(" ", p.lastLen-len(line))
+		}
+		p.lastLen = len(line)
+		fmt.Fprintf(os.Stderr, "\r%s", line)
+		return
 	}
-	p.lastLen = len(line)
-	fmt.Fprintf(os.Stderr, "\r%s", line)
+
+	fmt.Fprintln(os.Stderr, line)
 }
 
 func (p *progressWriter) Finish() {
@@ -64,6 +85,11 @@ func (p *progressWriter) Finish() {
 		return
 	}
 	p.finished = true
+	if p.printer != nil && p.printer.renderer != nil {
+		p.printer.renderer.Finish(p.barID)
+		p.printer.renderer.Flush()
+		return
+	}
 	p.print()
 	// Move to next line after finishing
 	fmt.Fprint(os.Stderr, "\n")
@@ -71,6 +97,9 @@ func (p *progressWriter) Finish() {
 
 func (p *progressWriter) NewLine() {
 	if p.finished {
+		return
+	}
+	if p.printer != nil && p.printer.renderer != nil {
 		return
 	}
 	p.lastLen = 0

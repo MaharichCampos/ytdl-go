@@ -24,6 +24,7 @@
   - [⚙️ Advanced options](#️-advanced-options)
 - [📊 Command Line Options](#-command-line-options)
 - [🏷️ Output Template Placeholders](#️-output-template-placeholders)
+- [🧾 Metadata & Sidecars](#-metadata--sidecars)
 - [🎮 Interactive Features](#-interactive-features)
 - [🛡️ Error Handling](#️-error-handling)
 - [💡 Examples by Use Case](#-examples-by-use-case)
@@ -38,6 +39,9 @@
 ## ✨ Features
 
 - **Metadata extraction** - `--info` prints detailed metadata (formats included) as pretty JSON
+- **Format/quality control** - `--quality`, `--format`, and `--list-formats` let you pick the variant you want before downloading
+- **Direct URL support** - Downloads public `.mp4`, `.webm`, `.mov`, `.m3u8`, and `.mpd` URLs (HLS/DASH unencrypted only)
+- **Parallel downloads** - `--jobs` runs multiple URLs concurrently with stable progress output
 - **Audio-only downloads** - `--audio` grabs the best audio-only format; otherwise downloads best progressive
 - **Playlist support** - Playlist URLs are expanded and downloaded entry by entry with progress tracking
 - **YouTube Music compatibility** - Automatically converts `music.youtube.com` URLs to regular YouTube URLs
@@ -211,6 +215,36 @@ ytdl-go https://www.youtube.com/watch?v=video1 https://www.youtube.com/watch?v=v
 
 ![Multiple URLs download](screenshots/17-multiple-urls.svg)
 
+```bash
+# List all available formats without downloading
+ytdl-go --list-formats https://www.youtube.com/watch?v=BaW_jenozKc
+```
+
+```bash
+# Pick a specific quality/container
+ytdl-go --quality 720p --format mp4 https://www.youtube.com/watch?v=BaW_jenozKc
+```
+
+```bash
+# JSON-only output (no human progress noise)
+ytdl-go --json --quality 1080p https://www.youtube.com/watch?v=BaW_jenozKc
+```
+
+```bash
+# Direct file download (public URL)
+ytdl-go https://example.com/video.mp4
+```
+
+```bash
+# Custom progress layout
+ytdl-go --progress-layout "{label} {percent} {current}/{total} {rate} {eta}" URL
+```
+
+```bash
+# Parallel downloads
+ytdl-go --jobs 4 URL1 URL2 URL3 URL4
+```
+
 ## 📊 Command Line Options
 
 | Option | Default | Description |
@@ -218,6 +252,14 @@ ytdl-go https://www.youtube.com/watch?v=video1 https://www.youtube.com/watch?v=v
 | `-o` | `{title}.{ext}` | Output path or template with supported placeholders |
 | `-audio` | `false` | Download best available audio-only format |
 | `-info` | `false` | Print video metadata as JSON without downloading |
+| `-list-formats` | `false` | List available formats for a URL and exit |
+| `-quality` | `best` | Preferred quality (e.g., `1080p`, `720p`, `128k`, `worst`) |
+| `-format` | `` | Preferred container/extension (e.g., `mp4`, `webm`, `m4a`) |
+| `-meta` | `` | Metadata override (`key=value`, repeatable) |
+| `-progress-layout` | `` | Progress layout template (use `{label}`, `{percent}`, `{rate}`, `{eta}`, `{current}`, `{total}`) |
+| `-segment-concurrency` | `auto` | Parallel segment downloads for HLS/DASH (0=auto, 1=disabled) |
+| `-jobs` | `1` | Number of concurrent downloads |
+| `-json` | `false` | Emit newline-delimited JSON output (suppresses progress text) |
 | `-quiet` | `false` | Suppress progress output (errors still shown) |
 | `-timeout` | `3m` | Per-request timeout (e.g., 30s, 5m, 1h) |
 
@@ -235,6 +277,59 @@ ytdl-go https://www.youtube.com/watch?v=video1 https://www.youtube.com/watch?v=v
 | `{playlist_id}` | Playlist ID | `PL59FEE129ADFF2B12` |
 | `{index}` | Current video index in playlist | `1`, `2`, `3` |
 | `{count}` | Total videos in playlist | `25` |
+
+## 🧾 Metadata & Sidecars
+
+Each successful download emits a sidecar JSON file alongside the media (`<output>.json`). Playlist downloads also emit a `playlist.json` manifest in the output folder.
+
+Metadata sources (in order of preference):
+- Platform/structured metadata from the extractor (e.g., YouTube API)
+- oEmbed/OG tags when downloading direct URLs that point to HTML pages
+- Manifest hints (when available)
+- `--meta` overrides
+
+Sidecar schema (fields omitted when unknown):
+
+```json
+{
+  "id": "dQw4w9WgXcQ",
+  "title": "Example Title",
+  "artist": "Example Artist",
+  "author": "Example Author",
+  "album": "Example Album",
+  "track": 1,
+  "disc": 1,
+  "release_date": "2009-10-25",
+  "release_year": 2009,
+  "duration_seconds": 212,
+  "thumbnail_url": "https://...",
+  "source_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  "extractor": "kkdai/youtube",
+  "extractor_version": "v2.10.5",
+  "output": "Downloads/Example Title.mp4",
+  "format": "mp4",
+  "quality": "720p",
+  "status": "ok",
+  "warnings": ["missing artist"],
+  "playlist": {
+    "id": "PL123...",
+    "title": "Example Playlist",
+    "url": "https://www.youtube.com/playlist?list=PL123...",
+    "index": 1,
+    "count": 25
+  }
+}
+```
+
+Metadata overrides:
+
+```bash
+ytdl-go --meta title="Custom Title" --meta artist="Custom Artist" --meta album="Custom Album" URL
+```
+
+Supported keys: `title`, `artist`, `author`, `album`, `track`, `disc`, `release_date`, `release_year`, `source_url`.
+
+Audio tag embedding: ID3 tags are embedded for `.mp3` outputs. Other containers are currently logged as “unsupported” and skipped.
 
 ## 🎮 Interactive Features
 
@@ -255,6 +350,7 @@ The downloader includes robust error handling:
 - **Network timeouts** - Respects the configured timeout per request
 - **Playlist errors** - Continues downloading remaining videos if one fails
 - **Detailed reporting** - Each error is reported with context about which video failed
+- **Categorized exit codes** - Stable exit codes for invalid URLs, unsupported formats, restricted/DRM responses, network failures, and filesystem errors
 
 ## 💡 Examples by Use Case
 
@@ -300,10 +396,25 @@ done
 ## 📝 Notes / Limitations
 
 - Only progressive formats are pulled for video; DASH-only video+audio muxing is not implemented
+- Only public, non-DRM content is supported; login-required/paywalled/DRM manifests are rejected
+- Adaptive HLS/DASH downloads concatenate segments; if a manifest uses unsupported segment templates the download will fail fast
+- Direct URL downloads rely on the server exposing a video/audio content type or a recognizable file extension
 - YouTube Music URLs (`music.youtube.com`) are converted to regular YouTube URLs automatically
 - Authentication, cookies, proxies, and subtitle downloads are not yet supported
+- No credential storage or cookie jars are used; no browser automation is performed
 - Output directories are created as needed; trailing slash on `-o` forces treating it as a directory
 - Maximum 9999 automatic renames when using the rename option to prevent infinite loops
+
+## 🚫 Non-goals
+
+- Bypassing DRM, paywalls, or login restrictions
+- Automating browser sessions or extracting authenticated cookies
+- Re-encoding/transcoding media (output is the source container)
+- Executing downloaded content
+
+## ⚖️ Legal / Copyright Notice
+
+This tool is intended for downloading publicly accessible content that you have the right to access and use. Respect copyright laws, license terms, and the Terms of Service of the source site.
 
 ## 🔧 Troubleshooting
 
@@ -332,6 +443,7 @@ The downloader automatically handles most 403 errors by retrying with a differen
 The downloader is optimized for:
 
 - Concurrent metadata fetching for playlists
+- Parallel segment downloads for adaptive streams
 - Minimal memory usage with streaming downloads
 - Fast resumption on network errors
 - Efficient progress tracking without impacting download speed

@@ -5,14 +5,19 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 type Printer struct {
-	quiet      bool
-	color      bool
-	columns    int
-	titleWidth int
+	quiet       bool
+	color       bool
+	columns     int
+	titleWidth  int
+	interactive bool
+	renderer    *ProgressRenderer
+	layout      string
+	mu          sync.RWMutex
 }
 
 func newPrinter(opts Options) *Printer {
@@ -29,24 +34,40 @@ func newPrinter(opts Options) *Printer {
 		titleWidth = 60
 	}
 
-	return &Printer{
-		quiet:      opts.Quiet,
-		color:      supportsColor(),
-		columns:    columns,
-		titleWidth: titleWidth,
+	printer := &Printer{
+		quiet:       opts.Quiet,
+		color:       supportsColor(),
+		columns:     columns,
+		titleWidth:  titleWidth,
+		interactive: isTerminal(os.Stderr),
+		layout:      strings.TrimSpace(opts.ProgressLayout),
 	}
+	if !opts.Quiet && printer.interactive {
+		printer.renderer = newProgressRenderer(os.Stderr, printer)
+	}
+	return printer
+}
+
+func NewPrinter(opts Options) *Printer {
+	return newPrinter(opts)
 }
 
 func (p *Printer) Prefix(index, total int, title string) string {
 	if total <= 0 {
 		total = 1
 	}
+	p.mu.RLock()
+	titleWidth := p.titleWidth
+	p.mu.RUnlock()
 	width := len(strconv.Itoa(total))
 	idx := fmt.Sprintf("%*d/%d", width, index, total)
-	return fmt.Sprintf("[%s] %-*s", idx, p.titleWidth, truncateText(title, p.titleWidth))
+	return fmt.Sprintf("[%s] %-*s", idx, titleWidth, truncateText(title, titleWidth))
 }
 
 func (p *Printer) progressLine(prefix string, current, total int64, elapsed time.Duration) string {
+	if p.layout != "" {
+		return formatProgressLayout(p.layout, prefix, current, total, elapsed)
+	}
 	speed := ""
 	if elapsed > 0 {
 		speed = humanBytes(int64(float64(current)/elapsed.Seconds())) + "/s"
@@ -75,10 +96,6 @@ func (p *Printer) ItemResult(prefix string, result downloadResult, err error) {
 		return
 	}
 
-	if result.hadProgress {
-		p.clearLine()
-	}
-
 	statusText := "OK"
 	statusColor := colorGreen
 	detail := fmt.Sprintf("%s %s", padLeft(humanBytes(result.bytes), 9), result.outputPath)
@@ -99,13 +116,24 @@ func (p *Printer) ItemResult(prefix string, result downloadResult, err error) {
 		plainStatus = "OK"
 	}
 
-	maxDetail := p.columns - len(prefix) - len(plainStatus) - 3
+	p.mu.RLock()
+	columns := p.columns
+	p.mu.RUnlock()
+	maxDetail := columns - len(prefix) - len(plainStatus) - 3
 	if maxDetail < 0 {
 		maxDetail = 0
 	}
 	detail = truncateText(detail, maxDetail)
 
-	fmt.Fprintf(os.Stderr, "%s %s %s\n", prefix, status, detail)
+	line := fmt.Sprintf("%s %s %s", prefix, status, detail)
+	if p.renderer != nil {
+		p.renderer.Log(line)
+		return
+	}
+	if result.hadProgress {
+		p.clearLine()
+	}
+	fmt.Fprintln(os.Stderr, line)
 }
 
 func (p *Printer) ItemSkipped(prefix, reason string) {
@@ -113,11 +141,19 @@ func (p *Printer) ItemSkipped(prefix, reason string) {
 		return
 	}
 	status := p.colorize("SKIP", colorYellow)
-	maxDetail := p.columns - len(prefix) - len("SKIP") - 3
+	p.mu.RLock()
+	columns := p.columns
+	p.mu.RUnlock()
+	maxDetail := columns - len(prefix) - len("SKIP") - 3
 	if maxDetail < 0 {
 		maxDetail = 0
 	}
-	fmt.Fprintf(os.Stderr, "%s %s %s\n", prefix, status, truncateText(reason, maxDetail))
+	line := fmt.Sprintf("%s %s %s", prefix, status, truncateText(reason, maxDetail))
+	if p.renderer != nil {
+		p.renderer.Log(line)
+		return
+	}
+	fmt.Fprintln(os.Stderr, line)
 }
 
 func (p *Printer) Summary(total, ok, failed, skipped int, bytes int64) {
@@ -127,8 +163,13 @@ func (p *Printer) Summary(total, ok, failed, skipped int, bytes int64) {
 	okLabel := p.colorize("OK", colorGreen)
 	failLabel := p.colorize("FAIL", colorRed)
 	skipLabel := p.colorize("SKIP", colorYellow)
-	fmt.Fprintf(os.Stderr, "Summary: %s %d | %s %d | %s %d | TOTAL %d | SIZE %s\n",
+	line := fmt.Sprintf("Summary: %s %d | %s %d | %s %d | TOTAL %d | SIZE %s",
 		okLabel, ok, failLabel, failed, skipLabel, skipped, total, humanBytes(bytes))
+	if p.renderer != nil {
+		p.renderer.Log(line)
+		return
+	}
+	fmt.Fprintln(os.Stderr, line)
 }
 
 func (p *Printer) colorize(text, color string) string {
@@ -139,11 +180,43 @@ func (p *Printer) colorize(text, color string) string {
 }
 
 func (p *Printer) clearLine() {
+	if !p.interactive {
+		return
+	}
 	width := p.columns
 	if width <= 0 {
 		width = 100
 	}
 	fmt.Fprintf(os.Stderr, "\r%s\r", strings.Repeat(" ", width))
+}
+
+func (p *Printer) refreshLayout() {
+	columns := terminalColumns()
+	if columns <= 0 {
+		columns = 100
+	}
+	p.mu.Lock()
+	p.columns = columns
+	titleWidth := columns - 44
+	if titleWidth < 20 {
+		titleWidth = 20
+	}
+	if titleWidth > 60 {
+		titleWidth = 60
+	}
+	p.titleWidth = titleWidth
+	p.mu.Unlock()
+}
+
+func (p *Printer) Log(line string) {
+	if p.quiet {
+		return
+	}
+	if p.renderer != nil {
+		p.renderer.Log(line)
+		return
+	}
+	fmt.Fprintln(os.Stderr, line)
 }
 
 func padLeft(value string, width int) string {
@@ -161,6 +234,50 @@ func truncateText(text string, max int) string {
 		return text[:max]
 	}
 	return text[:max-3] + "..."
+}
+
+func formatProgressLayout(layout, prefix string, current, total int64, elapsed time.Duration) string {
+	percent := ""
+	eta := ""
+	rate := ""
+	if elapsed > 0 {
+		rate = humanBytes(int64(float64(current)/elapsed.Seconds())) + "/s"
+	}
+	if total > 0 {
+		percent = fmt.Sprintf("%.2f%%", float64(current)*100/float64(total))
+		if current > 0 {
+			remaining := time.Duration(float64(elapsed) * (float64(total-current) / float64(current)))
+			eta = formatETA(remaining)
+		}
+	}
+
+	line := layout
+	line = strings.ReplaceAll(line, "{label}", prefix)
+	line = strings.ReplaceAll(line, "{prefix}", prefix)
+	line = strings.ReplaceAll(line, "{percent}", percent)
+	line = strings.ReplaceAll(line, "{current}", humanBytes(current))
+	line = strings.ReplaceAll(line, "{total}", humanBytes(total))
+	line = strings.ReplaceAll(line, "{rate}", rate)
+	line = strings.ReplaceAll(line, "{eta}", eta)
+	line = strings.ReplaceAll(line, "{bytes}", humanBytes(current))
+	return strings.TrimSpace(line)
+}
+
+func formatETA(duration time.Duration) string {
+	if duration <= 0 {
+		return ""
+	}
+	seconds := int(duration.Seconds())
+	if seconds < 60 {
+		return fmt.Sprintf("%ds", seconds)
+	}
+	minutes := seconds / 60
+	if minutes < 60 {
+		return fmt.Sprintf("%dm%ds", minutes, seconds%60)
+	}
+	hours := minutes / 60
+	minutes = minutes % 60
+	return fmt.Sprintf("%dh%dm", hours, minutes)
 }
 
 func terminalColumns() int {
