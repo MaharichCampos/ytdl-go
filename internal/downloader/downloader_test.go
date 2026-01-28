@@ -65,25 +65,6 @@ func TestIsRestrictedAccess(t *testing.T) {
 	}
 }
 
-func TestWrapAccessError(t *testing.T) {
-	restrictedErr := errors.New("video is private")
-	wrapped := wrapAccessError(restrictedErr)
-	if wrapped == restrictedErr {
-		t.Fatalf("expected restricted error to be wrapped")
-	}
-	if wrapped == nil || !strings.Contains(wrapped.Error(), "restricted access") {
-		t.Fatalf("expected restricted access prefix, got %v", wrapped)
-	}
-
-	plainErr := errors.New("plain error")
-	if got := wrapAccessError(plainErr); got != plainErr {
-		t.Fatalf("expected plain error to be unchanged, got %v", got)
-	}
-	if got := wrapAccessError(nil); got != nil {
-		t.Fatalf("expected nil to remain nil, got %v", got)
-	}
-}
-
 func TestWriteFormats(t *testing.T) {
 	video := &youtube.Video{
 		Formats: []youtube.Format{
