@@ -73,9 +73,9 @@ func main() {
 		go func() {
 			for t := range tasks {
 				if !opts.Quiet && !opts.JSON {
-					printer.Log(fmt.Sprintf("[%d/%d] %s", t.index+1, len(urls), t.url))
+					printer.Log(downloader.LogInfo, fmt.Sprintf("[%d/%d] %s", t.index+1, len(urls), t.url))
 				}
-				err := downloader.ProcessWithPrinter(ctx, t.url, opts, printer)
+				err := downloader.Process(ctx, t.url, opts)
 				results <- result{url: t.url, err: err}
 			}
 		}()

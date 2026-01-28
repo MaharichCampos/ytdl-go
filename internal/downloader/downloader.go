@@ -40,14 +40,19 @@ func ResetDuplicateAction() {
 
 // Options describes CLI behavior for a download run.
 type Options struct {
-	OutputTemplate string
-	AudioOnly      bool
-	InfoOnly       bool
-	ListFormats    bool
-	Quiet          bool
-	Timeout        time.Duration
-	ProgressLayout string
-	LogLevel       string
+	OutputTemplate     string
+	AudioOnly          bool
+	InfoOnly           bool
+	ListFormats        bool
+	Quiet              bool
+	JSON               bool
+	Quality            string
+	Format             string
+	Timeout            time.Duration
+	ProgressLayout     string
+	LogLevel           string
+	SegmentConcurrency int
+	MetaOverrides      map[string]string
 }
 
 type outputContext struct {
@@ -191,21 +196,24 @@ func Process(ctx context.Context, url string, opts Options) error {
 	}
 	printer := newPrinter(opts, progressManager)
 
-	if err := validateInputURL(url); err != nil {
+	if _, err := validateInputURL(url); err != nil {
 		return err
 	}
 
+	// Check if it's a music URL before converting
+	isMusicURL := strings.Contains(url, "music.youtube.com")
+	
 	// Convert YouTube Music URLs to regular YouTube URLs
 	url = ConvertMusicURL(url)
 
 	if looksLikePlaylist(url) {
 		if playlistIDRegex.MatchString(url) {
-			return processPlaylist(ctx, url, opts, printer)
+			return processPlaylist(ctx, url, opts, printer, isMusicURL)
 		}
 		if err := validateURL(url); err != nil {
 			return err
 		}
-		return processPlaylist(ctx, url, opts, printer)
+		return processPlaylist(ctx, url, opts, printer, isMusicURL)
 	}
 	if err := validateURL(url); err != nil {
 		return err
@@ -214,9 +222,6 @@ func Process(ctx context.Context, url string, opts Options) error {
 	normalizedURL, err := validateInputURL(url)
 	if err != nil {
 		return wrapAccessError(fmt.Errorf("fetching metadata: %w", err))
-	}
-	if opts.ListFormats {
-		return printFormats(video)
 	}
 	extractor, err := selectExtractor(normalizedURL)
 	if err != nil {
@@ -388,7 +393,7 @@ func isRestrictedAccess(err error) bool {
 	return false
 }
 
-func processPlaylist(ctx context.Context, url string, opts Options, printer *Printer) error {
+func processPlaylist(ctx context.Context, url string, opts Options, printer *Printer, isMusicURL bool) error {
 	savedClient := youtube.DefaultClient
 	defer func() {
 		youtube.DefaultClient = savedClient

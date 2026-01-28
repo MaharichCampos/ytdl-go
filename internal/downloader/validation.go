@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func validateInputURL(raw string) error {
+func validateURLScheme(raw string) error {
 	parsed, err := url.ParseRequestURI(strings.TrimSpace(raw))
 	if err != nil {
 		return fmt.Errorf("invalid url %q: %w", raw, err)
