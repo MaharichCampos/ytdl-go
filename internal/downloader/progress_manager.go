@@ -161,10 +161,7 @@ func (m *progressManager) Stop() {
 	close(m.stop)
 	<-m.done
 	
-	// Wait for all trackers to complete and stop the progress writer
-	for m.pw.LengthActive() > 0 {
-		time.Sleep(50 * time.Millisecond)
-	}
+	// Stop the progress writer (it will render one final time)
 	m.pw.Stop()
 }
 
