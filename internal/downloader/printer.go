@@ -53,10 +53,12 @@ type Printer struct {
 	progressEnabled bool
 	interactive     bool
 	layout          string
+	renderer        *progressRenderer
+	manager         *ProgressManager
 	mu              sync.RWMutex
 }
 
-func newPrinter(opts Options) *Printer {
+func newPrinter(opts Options, manager *ProgressManager) *Printer {
 	columns := terminalColumns()
 	if columns <= 0 {
 		columns = 100
@@ -70,22 +72,29 @@ func newPrinter(opts Options) *Printer {
 		titleWidth = 60
 	}
 
+	var renderer *progressRenderer
+	if manager != nil {
+		renderer = &progressRenderer{manager: manager}
+	}
+
 	printer := &Printer{
 		quiet:           opts.Quiet,
 		color:           supportsColor(),
 		columns:         columns,
 		titleWidth:      titleWidth,
 		logLevel:        parseLogLevel(opts.LogLevel),
-		progressEnabled: isTerminal(os.Stderr) && supportsANSI(),
-		interactive:     isTerminal(os.Stderr),
+		progressEnabled: interactive,
+		interactive:     interactive,
 		layout:          opts.ProgressLayout,
+		renderer:        renderer,
+		manager:         manager,
 	}
-	// Note: ProgressRenderer is legacy code, not used with go-pretty
 	return printer
 }
 
 func NewPrinter(opts Options) *Printer {
-	return newPrinter(opts)
+	manager := NewProgressManager(opts)
+	return newPrinter(opts, manager)
 }
 
 func (p *Printer) Prefix(index, total int, title string) string {
@@ -195,7 +204,10 @@ func (p *Printer) Summary(total, ok, failed, skipped int, bytes int64) {
 	skipLabel := p.colorize("SKIP", colorYellow)
 	line := fmt.Sprintf("Summary: %s %d | %s %d | %s %d | TOTAL %d | SIZE %s",
 		okLabel, ok, failLabel, failed, skipLabel, skipped, total, humanBytes(bytes))
-	// Note: printer.manager is not currently implemented
+	if p.renderer != nil {
+		p.renderer.Log(line)
+		return
+	}
 	fmt.Fprintln(os.Stderr, line)
 }
 

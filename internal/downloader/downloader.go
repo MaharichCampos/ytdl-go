@@ -48,11 +48,11 @@ type Options struct {
 	JSON               bool
 	Quality            string
 	Format             string
+	MetaOverrides      map[string]string
+	SegmentConcurrency int
 	Timeout            time.Duration
 	ProgressLayout     string
 	LogLevel           string
-	SegmentConcurrency int
-	MetaOverrides      map[string]string
 }
 
 type outputContext struct {
@@ -189,27 +189,90 @@ func wrapFetchError(err error, context string) error {
 
 // Process fetches metadata, selects the best matching format, and downloads it.
 func Process(ctx context.Context, url string, opts Options) error {
-	printer := newPrinter(opts)
+	return ProcessWithManager(ctx, url, opts, nil)
+}
+
+// ProcessWithManager is like Process but allows sharing a progress manager across
+// multiple concurrent downloads. If manager is nil, a new one is created.
+func ProcessWithManager(ctx context.Context, url string, opts Options, manager *ProgressManager) error {
+	var ownedManager *ProgressManager
+	if manager == nil {
+		ownedManager = NewProgressManager(opts)
+		if ownedManager != nil {
+			ownedManager.Start(ctx)
+			defer ownedManager.Stop()
+		}
+		manager = ownedManager
+	}
+	printer := newPrinter(opts, manager)
 
 	normalizedURL, err := validateInputURL(url)
 	if err != nil {
 		return err
 	}
+	originalURL := normalizedURL
+	url = ConvertMusicURL(normalizedURL)
 
-	if err := validateURL(normalizedURL); err != nil {
+	printer := newPrinter(opts)
+
+	// Convert YouTube Music URLs to regular YouTube URLs
+	isMusicURL := strings.Contains(originalURL, "music.youtube.com")
+
+	if looksLikePlaylist(url) {
+		return processPlaylist(ctx, url, opts, printer, isMusicURL)
+	}
+
+	if !isYouTubeURL(url) {
+		result, err := processDirect(ctx, url, opts, printer)
+		if opts.JSON {
+			status := "ok"
+			errMsg := ""
+			if err != nil {
+				status = "error"
+				errMsg = err.Error()
+			}
+			emitJSONResult(jsonResult{
+				Type:    "item",
+				Status:  status,
+				URL:     url,
+				Output:  result.outputPath,
+				Bytes:   result.bytes,
+				Retries: result.retried,
+				Error:   errMsg,
+			})
+		}
 		return err
 	}
 
-	extractor := selectExtractor(normalizedURL)
-	return extractor.Process(ctx, normalizedURL, opts, printer)
-}
-
-// selectExtractor returns the appropriate extractor for the given URL
-func selectExtractor(url string) Extractor {
-	if isYouTubeURL(url) {
-		return YouTubeExtractor{}
+	client := newClient(opts)
+	video, err := client.GetVideoContext(ctx, normalizedURL)
+	if err != nil {
+		return markReported(wrapFetchError(err, "fetching video metadata"))
 	}
-	return DirectExtractor{}
+
+	if opts.InfoOnly {
+		return printVideoInfo(video)
+	}
+	if opts.ListFormats {
+		return renderFormats(video, "", opts, "", "", 0, 0)
+	}
+
+	ctxInfo := outputContext{}
+	prefix := printer.Prefix(1, 1, video.Title)
+	result, err := downloadVideo(ctx, client, video, opts, ctxInfo, printer, prefix)
+	if err != nil {
+		printer.ItemResult(prefix, result, err)
+		return markReported(err)
+	}
+	okCount := 1
+	skipped := 0
+	if result.skipped {
+		okCount = 0
+		skipped = 1
+	}
+	printer.ItemResult(prefix, result, nil)
+	printer.Summary(1, okCount, 0, skipped, result.bytes)
+	return nil
 }
 
 func renderFormats(video *youtube.Video, header string, opts Options, playlistID, playlistTitle string, index, total int) error {
@@ -388,6 +451,9 @@ func processPlaylist(ctx context.Context, url string, opts Options, printer *Pri
 		return wrapAccessError(fmt.Errorf("fetching playlist: %w", err))
 	}
 
+	if opts.ListFormats {
+		return errors.New("format listing is not supported for playlists")
+	}
 	if opts.InfoOnly {
 		return printPlaylistInfo(playlist)
 	}
@@ -1185,6 +1251,26 @@ func writeFormats(output io.Writer, video *youtube.Video) error {
 		)
 	}
 	return writer.Flush()
+}
+
+func printVideoInfo(video *youtube.Video) error {
+	payload := struct {
+		ID          string `json:"id"`
+		Title       string `json:"title"`
+		Description string `json:"description"`
+		Author      string `json:"author"`
+		Duration    int    `json:"duration_seconds"`
+	}{
+		ID:          video.ID,
+		Title:       video.Title,
+		Description: video.Description,
+		Author:      video.Author,
+		Duration:    int(video.Duration.Seconds()),
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(payload)
 }
 
 func printPlaylistInfo(playlist *youtube.Playlist) error {
