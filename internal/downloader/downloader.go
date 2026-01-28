@@ -82,6 +82,10 @@ func Process(ctx context.Context, url string, opts Options) error {
 	}
 	printer := newPrinter(opts, progressManager)
 
+	if err := validateInputURL(url); err != nil {
+		return err
+	}
+
 	// Convert YouTube Music URLs to regular YouTube URLs
 	url = ConvertMusicURL(url)
 
