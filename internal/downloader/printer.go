@@ -77,6 +77,8 @@ func newPrinter(opts Options, manager *ProgressManager) *Printer {
 		renderer = &progressRenderer{manager: manager}
 	}
 
+	interactive := !opts.Quiet && manager != nil
+
 	printer := &Printer{
 		quiet:           opts.Quiet,
 		color:           supportsColor(),

@@ -213,8 +213,6 @@ func ProcessWithManager(ctx context.Context, url string, opts Options, manager *
 	originalURL := normalizedURL
 	url = ConvertMusicURL(normalizedURL)
 
-	printer := newPrinter(opts)
-
 	// Convert YouTube Music URLs to regular YouTube URLs
 	isMusicURL := strings.Contains(originalURL, "music.youtube.com")
 
