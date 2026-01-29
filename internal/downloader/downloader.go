@@ -705,7 +705,8 @@ func downloadVideo(ctx context.Context, client *youtube.Client, video *youtube.V
 }
 
 func selectFormat(video *youtube.Video, opts Options) (*youtube.Format, error) {
-	// If itag is specified, search for it directly
+	// If itag is specified, search for it directly.
+	// Itag takes precedence over quality, format, and audio-only options.
 	if opts.Itag > 0 {
 		for i := range video.Formats {
 			format := &video.Formats[i]

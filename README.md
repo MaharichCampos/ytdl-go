@@ -265,7 +265,7 @@ ytdl-go --jobs 4 URL1 URL2 URL3 URL4
 | `-list-formats` | `false` | List available formats for a URL and exit |
 | `-quality` | `best` | Preferred quality (e.g., `1080p`, `720p`, `128k`, `worst`) |
 | `-format` | `` | Preferred container/extension (e.g., `mp4`, `webm`, `m4a`) |
-| `-itag` | `` | Download specific format by itag number (use `-list-formats` to see available itags) |
+| `-itag` | `0` | Download specific format by itag number (use `-list-formats` to see available itags) |
 | `-meta` | `` | Metadata override (`key=value`, repeatable) |
 | `-progress-layout` | `` | Progress layout template (use `{label}`, `{percent}`, `{rate}`, `{eta}`, `{current}`, `{total}`) |
 | `-segment-concurrency` | `auto` | Parallel segment downloads for HLS/DASH (0=auto, 1=disabled) |
