@@ -1246,8 +1246,12 @@ func ConvertMusicURL(u string) string {
 		return u
 	}
 
+	// Normalize the host: lowercase and trim www. prefix
+	host := strings.ToLower(parsed.Host)
+	host = strings.TrimPrefix(host, "www.")
+
 	// If it's not a music.youtube.com URL, return as-is
-	if parsed.Host != "music.youtube.com" {
+	if host != "music.youtube.com" {
 		return u
 	}
 
