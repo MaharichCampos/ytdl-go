@@ -421,10 +421,6 @@ func processPlaylist(ctx context.Context, url string, opts Options, printer *Pri
 		return wrapAccessError(fmt.Errorf("fetching playlist: %w", err))
 	}
 
-	if len(playlist.Videos) == 0 {
-		return wrapCategory(CategoryUnsupported, errors.New("playlist has no videos"))
-	}
-
 	// Fetch playlist title from YouTube Music (the library often returns empty/generic titles)
 	// Do this before ListFormats/InfoOnly so they get the proper title
 	if isMusicURL {
@@ -436,11 +432,17 @@ func processPlaylist(ctx context.Context, url string, opts Options, printer *Pri
 		playlist.Title = "Playlist"
 	}
 
+	// Check InfoOnly first, then ListFormats (consistent with single-video path)
+	if opts.InfoOnly {
+		return printPlaylistInfo(playlist)
+	}
 	if opts.ListFormats {
 		return listPlaylistFormats(ctx, playlist, opts, printer)
 	}
-	if opts.InfoOnly {
-		return printPlaylistInfo(playlist)
+
+	// Only check for empty videos when actually downloading
+	if len(playlist.Videos) == 0 {
+		return wrapCategory(CategoryUnsupported, errors.New("playlist has no videos"))
 	}
 
 	albumMeta := map[string]musicEntryMeta{}
