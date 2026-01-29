@@ -421,13 +421,6 @@ func processPlaylist(ctx context.Context, url string, opts Options, printer *Pri
 		return wrapAccessError(fmt.Errorf("fetching playlist: %w", err))
 	}
 
-	if opts.InfoOnly {
-		return printPlaylistInfo(playlist)
-	}
-	if opts.ListFormats {
-		return listPlaylistFormats(ctx, playlist, opts, printer)
-	}
-
 	if len(playlist.Videos) == 0 {
 		return wrapCategory(CategoryUnsupported, errors.New("playlist has no videos"))
 	}
