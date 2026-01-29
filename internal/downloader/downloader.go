@@ -439,7 +439,7 @@ func processPlaylist(ctx context.Context, url string, opts Options, printer *Pri
 			playlist.Title = title
 		}
 	}
-	if playlist.Title == "" || playlist.Title == "Playlist" {
+	if playlist.Title == "" {
 		playlist.Title = "Playlist"
 	}
 
