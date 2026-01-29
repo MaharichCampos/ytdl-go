@@ -342,6 +342,10 @@ func renderFormats(video *youtube.Video, header string, opts Options, playlistID
 
 func listPlaylistFormats(ctx context.Context, playlist *youtube.Playlist, opts Options, _ *Printer) error {
 	// Allow listing formats even for empty playlists (will just render nothing)
+	if len(playlist.Videos) == 0 {
+		return nil
+	}
+
 	youtube.DefaultClient = youtube.AndroidClient
 	client := newClient(opts)
 	for i, entry := range playlist.Videos {
@@ -1238,6 +1242,13 @@ func isYouTubeURL(raw string) bool {
 	return host == "youtube.com" || host == "youtu.be" || host == "music.youtube.com"
 }
 
+// normalizeHostname returns the normalized hostname from a URL:
+// lowercase, with "www." prefix removed, and port stripped.
+func normalizeHostname(parsed *url.URL) string {
+	host := strings.ToLower(parsed.Hostname())
+	return strings.TrimPrefix(host, "www.")
+}
+
 // ConvertMusicURL converts YouTube Music URLs to regular YouTube URLs
 func ConvertMusicURL(u string) string {
 	// Parse the URL
@@ -1246,21 +1257,14 @@ func ConvertMusicURL(u string) string {
 		return u
 	}
 
-	// Normalize the hostname: lowercase and trim www. prefix (Hostname() strips port)
-	host := strings.ToLower(parsed.Hostname())
-	host = strings.TrimPrefix(host, "www.")
-
 	// If it's not a music.youtube.com URL, return as-is
-	if host != "music.youtube.com" {
+	if normalizeHostname(parsed) != "music.youtube.com" {
 		return u
 	}
 
-	// Replace the host with www.youtube.com (preserve port if present)
-	if parsed.Port() != "" {
-		parsed.Host = "www.youtube.com:" + parsed.Port()
-	} else {
-		parsed.Host = "www.youtube.com"
-	}
+	// Replace the host with www.youtube.com (do not preserve port)
+	// so that downstream YouTube URL checks that rely on Host match as expected.
+	parsed.Host = "www.youtube.com"
 
 	// Remove any music-specific parameters
 	query := parsed.Query()
@@ -1277,11 +1281,7 @@ func isMusicYouTubeURL(u string) bool {
 		return false
 	}
 
-	// Normalize the hostname: lowercase and trim www. prefix (Hostname() strips port)
-	host := strings.ToLower(parsed.Hostname())
-	host = strings.TrimPrefix(host, "www.")
-
-	return host == "music.youtube.com"
+	return normalizeHostname(parsed) == "music.youtube.com"
 }
 
 const musicUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
